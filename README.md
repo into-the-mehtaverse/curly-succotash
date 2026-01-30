@@ -16,6 +16,7 @@ uv sync
 
 ## What’s in this repo
 
+- **`QUICKSTART.md`** — **Start here.** Short orientation to Gymnasium and PufferLib and what actually matters.
 - **`src/curly_succotash/env.py`** — Two minimal envs:
   1. **Gymnasium + wrapper:** `SampleGymnasiumEnv` + `make_gymnasium_env()` (easiest).
   2. **Native PufferEnv:** `SamplePufferEnv` (in-place buffer updates for vectorization).

@@ -40,6 +40,8 @@ For a **pure Python** reference that stays close to this API (single-agent, in-p
 - **Scale:** Observations and rewards roughly in **[-1, 1]** tend to behave better.
 - **Binding (C envs):** If you add a C backend, the binding must pass the same init args as your C code and call your C init.
 
+**Detailed explanation of each item:** see **`ENV_CHECKLIST_EXPLAINED.md`** in this repo.
+
 ---
 
 ## How to use the API and what it’s for

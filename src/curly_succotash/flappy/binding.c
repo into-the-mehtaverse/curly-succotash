@@ -1,5 +1,6 @@
 #include "flappy.h"
 
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #define Env Flappy
 #include "env_binding.h"
 

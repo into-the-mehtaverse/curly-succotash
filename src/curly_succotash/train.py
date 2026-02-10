@@ -19,11 +19,12 @@ from curly_succotash.env import flappy_grid_env_creator, FlappyGridEnv
 class FlappyGridPolicy(torch.nn.Module):
     """Simple MLP policy for FlappyGrid or Flappy (small obs, discrete actions)."""
 
-    def __init__(self, env):
+    def __init__(self, env, logit_temperature=2.0):
         super().__init__()
         obs_size = env.single_observation_space.shape[0]
         n_actions = env.single_action_space.n
-        hidden = 64
+        hidden = 128
+        self.logit_temperature = logit_temperature
         self.net = torch.nn.Sequential(
             pufferlib.pytorch.layer_init(torch.nn.Linear(obs_size, hidden)),
             torch.nn.ReLU(),
@@ -40,7 +41,9 @@ class FlappyGridPolicy(torch.nn.Module):
         return logits, values
 
     def forward(self, observations, state=None):
-        return self.forward_eval(observations, state)
+        logits, values = self.forward_eval(observations, state)
+        logits = logits / self.logit_temperature
+        return logits, values
 
 
 def main():
@@ -60,10 +63,11 @@ def main():
     args = pufferl.load_config("default")
     args["train"]["env"] = env_name
     # Long enough to see policy learn; override with --train.total_timesteps if needed
-    args["train"]["total_timesteps"] = 2_000_000
+    args["train"]["total_timesteps"] = 5_000_000
     args["train"]["optimizer"] = "adam"
-    args["train"]["learning_rate"] = 0.01
+    args["train"]["learning_rate"] = 0.02
     args["train"]["clip_coef"] = 0.5
+    args["train"]["ent_coef"] = 0.2
     if not torch.cuda.is_available():
         args["train"]["device"] = "cpu"
 

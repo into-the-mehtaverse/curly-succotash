@@ -64,7 +64,7 @@ typedef struct {
 static void add_log(Flappy* env) {
     env->log.perf = env->score > 0 ? 1.0f : 0.0f;
     env->log.score = (float)env->score;
-    env->log.episode_return += env->rewards[0];
+    /* episode_return already accumulated each step in c_step */
     env->log.episode_length = (float)env->step_count;
     env->log.n += 1.0f;
 }
@@ -135,6 +135,7 @@ static int collides(Flappy* env, float bx, float by, float br) {
 }
 
 void c_reset(Flappy* env) {
+    env->log.episode_return = 0.0f;
     env->bird_y = 0.5f;
     env->bird_vy = 0.0f;
     env->score = 0;
@@ -157,8 +158,8 @@ void c_step(Flappy* env) {
 
     int a = env->actions[0];
     if (a == 1)
-        env->bird_vy = env->flap_velocity;
-    env->bird_vy -= env->gravity;
+        env->bird_vy = -env->flap_velocity;
+    env->bird_vy += env->gravity;
     env->bird_y += env->bird_vy;
     env->bird_y = clampf(env->bird_y, 0.0f, 1.0f);
 
@@ -168,6 +169,7 @@ void c_step(Flappy* env) {
     if (by_px - br <= 0.0f || by_px + br >= (float)env->height) {
         env->rewards[0] = -1.0f;
         env->terminals[0] = 1;
+        env->log.episode_return += env->rewards[0];
         add_log(env);
         c_reset(env);
         return;
@@ -175,6 +177,7 @@ void c_step(Flappy* env) {
     if (collides(env, bx_px, by_px, br)) {
         env->rewards[0] = -1.0f;
         env->terminals[0] = 1;
+        env->log.episode_return += env->rewards[0];
         add_log(env);
         c_reset(env);
         return;
@@ -203,12 +206,16 @@ void c_step(Flappy* env) {
         spawn_pipe(env, leftmost);
     }
 
+    env->rewards[0] += 0.02f; /* survival bonus: reward per step alive */
+
     if (env->step_count >= env->max_steps) {
         env->terminals[0] = 1;
+        env->log.episode_return += env->rewards[0];
         add_log(env);
         c_reset(env);
         return;
     }
+    env->log.episode_return += env->rewards[0];
     compute_observations(env);
 }
 

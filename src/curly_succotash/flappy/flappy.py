@@ -6,11 +6,11 @@ import pufferlib
 
 from curly_succotash.flappy import binding
 
-OBS_DIM = 6
+OBS_DIM = 9
 
 
 class Flappy(pufferlib.PufferEnv):
-    """Single-agent Flappy. Actions: 0 = no flap, 1 = flap. Obs: bird y, vy, next pipe dist/gap."""
+    """Single-agent Flappy. Actions: 0 = no flap, 1 = flap. Obs: bird y, vy, next pipe dist/gap, signed gap error (above/below)."""
 
     def __init__(
         self,
@@ -30,6 +30,11 @@ class Flappy(pufferlib.PufferEnv):
         self.render_mode = render_mode
         self.num_agents = num_envs
         self.log_interval = log_interval
+        if binding is None:
+            raise ImportError(
+                "Flappy C extension not loaded. Build it from the flappy directory: "
+                "cd src/curly_succotash/flappy && make"
+            )
         super().__init__(buf)
         self.c_envs = binding.vec_init(
             self.observations,

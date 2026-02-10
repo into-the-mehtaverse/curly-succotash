@@ -6,15 +6,21 @@
 #include "raylib.h"
 
 #define MAX_PIPES 5
-#define OBS_DIM 6
+#define OBS_DIM 9
 #define BIRD_X_RATIO 0.2f
 #define PIPE_WIDTH_RATIO 0.15f
 #define BIRD_RADIUS_RATIO 0.03f
 #define GAP_HEIGHT_RATIO 0.28f
-#define PIPE_SPEED_RATIO 0.012f
-#define FLAP_VEL 0.055f
+#define PIPE_SPEED_RATIO 0.006f  /* slower pipes so bird has more time to align; was 0.012 */
+#define FLAP_VEL 0.02f   /* upward velocity per flap; lower = finer control, less overshoot */
 #define GRAVITY 0.0018f
 #define PIPE_SPACING_RATIO 0.45f
+#define SURVIVAL_BONUS 0.01f  /* small reward per step alive so policy learns to flap to avoid ground */
+#define IN_GAP_BONUS 0.02f    /* reward when bird is inside the gap; scaled by distance to pipe */
+#define ALIGNMENT_BONUS 0.008f   /* tiny reward for being near gap center (before entering); encourages lining up early */
+#define ALIGNMENT_TOLERANCE 0.2f /* normalized y distance over which alignment bonus decays (wider than gap) */
+#define STREAK_BONUS 0.1f       /* extra reward per pipe already passed (1st=1.0, 2nd=1.1, 3rd=1.2, ...) */
+#define FLAP_PENALTY 0.001f    /* tiny cost per flap to discourage unnecessary flapping (e.g. when already high) */
 
 typedef struct {
     float perf;
@@ -116,6 +122,25 @@ void compute_observations(Flappy* env) {
     o[3] = gap_center;
     o[4] = gap_h;
     o[5] = (next >= 0) ? 1.0f : 0.0f;
+    /* o[6]: signed gap error = gap_center - bird_y. Positive = bird below gap (flap more), negative = bird above gap (cool it) */
+    o[6] = (next >= 0) ? clampf(gap_center - env->bird_y, -1.0f, 1.0f) : 0.0f;
+    /* o[7]: clearance from top of gap (in half-gap units). Positive = bird below top edge (safe), negative = above top (danger) */
+    /* o[8]: clearance from bottom of gap. Negative = bird above bottom (safe), positive = below bottom (danger) */
+    if (next >= 0) {
+        float half = gap_h * 0.5f;
+        float top_edge = gap_center - half;
+        float bottom_edge = gap_center + half;
+        if (half > 1e-6f) {
+            o[7] = clampf((top_edge - env->bird_y) / half, -1.0f, 1.0f);
+            o[8] = clampf((env->bird_y - bottom_edge) / half, -1.0f, 1.0f);
+        } else {
+            o[7] = 0.0f;
+            o[8] = 0.0f;
+        }
+    } else {
+        o[7] = 0.0f;
+        o[8] = 0.0f;
+    }
 }
 
 static int collides(Flappy* env, float bx, float by, float br) {
@@ -157,8 +182,10 @@ void c_step(Flappy* env) {
     env->step_count++;
 
     int a = env->actions[0];
-    if (a == 1)
+    if (a == 1) {
         env->bird_vy = -env->flap_velocity;
+        env->rewards[0] -= FLAP_PENALTY;
+    }
     env->bird_vy += env->gravity;
     env->bird_y += env->bird_vy;
     env->bird_y = clampf(env->bird_y, 0.0f, 1.0f);
@@ -187,8 +214,8 @@ void c_step(Flappy* env) {
     for (int i = 0; i < env->num_pipes; i++) {
         if (!env->pipes[i].scored && env->pipes[i].x + pw < bx_px) {
             env->pipes[i].scored = 1;
+            env->rewards[0] += 1.0f + STREAK_BONUS * (float)env->score;
             env->score++;
-            env->rewards[0] += 1.0f;
         }
     }
 
@@ -206,7 +233,37 @@ void c_step(Flappy* env) {
         spawn_pipe(env, leftmost);
     }
 
-    env->rewards[0] += 0.02f; /* survival bonus: reward per step alive */
+    env->rewards[0] += SURVIVAL_BONUS;
+
+    /* in-gap bonus only (scaled by distance to pipe); no penalty for being out */
+    {
+        float bird_x = (float)env->width * BIRD_X_RATIO;
+        int next = -1;
+        for (int i = 0; i < env->num_pipes; i++) {
+            if (env->pipes[i].x + pw > bird_x) {
+                next = i;
+                break;
+            }
+        }
+        if (next >= 0) {
+            float gap_center = env->pipes[next].gap_center_y;
+            float gap_h = env->pipes[next].gap_height;
+            float half = gap_h * 0.5f;
+            float dx = env->pipes[next].x - bird_x;
+            float dist_norm = clampf(dx / (float)env->width, 0.0f, 1.0f);
+            float scale = 1.0f - dist_norm;
+
+            if (env->bird_y >= gap_center - half && env->bird_y <= gap_center + half) {
+                env->rewards[0] += scale * IN_GAP_BONUS;
+            }
+            /* alignment: small reward for being near gap center even before entering (encourages lining up early) */
+            {
+                float align_err = fabsf(env->bird_y - gap_center);
+                float align_scale = 1.0f - clampf(align_err / ALIGNMENT_TOLERANCE, 0.0f, 1.0f);
+                env->rewards[0] += ALIGNMENT_BONUS * align_scale;
+            }
+        }
+    }
 
     if (env->step_count >= env->max_steps) {
         env->terminals[0] = 1;

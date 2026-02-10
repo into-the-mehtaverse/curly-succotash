@@ -47,14 +47,21 @@ class FlappyGridPolicy(torch.nn.Module):
 
 
 def main():
-    # Parse --train.env before load_config; strip it from argv so PufferLib's parser doesn't reject it
+    # Parse --train.env and --train.total-timesteps before load_config; strip from argv so PufferLib's parser doesn't reject
     import sys
     parser = argparse.ArgumentParser()
     parser.add_argument("--train.env", default="flappy_grid", dest="train_env")
+    parser.add_argument("--train.total-timesteps", type=int, default=None, dest="train_total_timesteps")
     known, _ = parser.parse_known_args()
     env_name = known.train_env
+    total_timesteps_override = known.train_total_timesteps
     if "--train.env" in sys.argv:
         i = sys.argv.index("--train.env")
+        del sys.argv[i]
+        if i < len(sys.argv):
+            del sys.argv[i]  # value
+    if "--train.total-timesteps" in sys.argv:
+        i = sys.argv.index("--train.total-timesteps")
         del sys.argv[i]
         if i < len(sys.argv):
             del sys.argv[i]  # value
@@ -62,8 +69,7 @@ def main():
     # Load default PufferLib config (train + vec sections)
     args = pufferl.load_config("default")
     args["train"]["env"] = env_name
-    # Long enough to see policy learn; override with --train.total_timesteps if needed
-    args["train"]["total_timesteps"] = 5_000_000
+    args["train"]["total_timesteps"] = total_timesteps_override if total_timesteps_override is not None else 5_000_000
     args["train"]["optimizer"] = "adam"
     args["train"]["learning_rate"] = 0.02
     args["train"]["clip_coef"] = 0.5

@@ -31,3 +31,9 @@ Place `bird.png` and `pipe.png` in `resources/flappy/` (relative to the process 
 
 - Train (from project root): `uv run python -m curly_succotash.train --train.env flappy`
 - Eval with render: run a small script that creates `Flappy(num_envs=1)`, calls `reset()`, then in a loop `step(actions)` and `render()`.
+
+
+uv run python -m curly_succotash.train --train.env flappy
+uv run python -m curly_succotash.run_eval_flappy
+
+uv run python -m curly_succotash.train --train.env flappy --train.total-timesteps 15000000

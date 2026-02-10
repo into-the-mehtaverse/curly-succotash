@@ -39,3 +39,26 @@ Sweep summary (final entropy per lr × clip_coef, 500k steps per run):
 | 0.03   | 0.35      | 0.0000  | 60    | yes            |
 | 0.03   | 0.5       | 0.0000  | 61    | yes            |
 | 0.03   | 0.7       | 0.0000  | 60    | yes            |
+
+---
+
+**Flappy (C + raylib): reward, obs, and env iterations.** After porting to a proper Flappy Bird–style env (pipes, gap, continuous-ish physics), the agent often couldn’t get through the first pipe. Below are the changes I tried, what broke, and how things improved to where they are now.
+
+**Env / physics tweaks**
+- **Slower pipes** – Reduced `PIPE_SPEED_RATIO` from 0.012 → 0.006 so the bird had more time to line up. Without this, the agent rarely got +1 for passing a pipe and learning didn’t take off.
+- **Lower flap velocity** – Started at 0.055; the bird overshot and hit the top pipe. I stepped it down (0.04 → 0.032 → 0.022 → 0.02). Each reduction gave finer control and less “flap into ceiling.” This was one of the biggest levers for actually getting through pipes.
+
+**Rewards**
+- **Survival bonus** – Already had +0.01 per step alive so the policy had a positive signal for “don’t die.”
+- **In-gap bonus** – +0.02 when the bird is *inside* the gap, scaled by distance to the pipe (closer = more). Helps with “stay in the safe zone” once you’re there.
+- **Alignment bonus** – Added a small reward for being *near* the gap center *before* entering the gap (e.g. 0.008 per step, decaying with vertical distance over a tolerance of 0.2). Goal: encourage lining up early instead of last-second flapping. This helped.
+- **Streak bonus** – Pipe-pass reward became 1.0 for first pipe, 1.1 for second, 1.2 for third, etc., so the agent is incentivized to keep going for later pipes.
+- **Flap penalty** – Tried a tiny cost per flap (0.001) to discourage flapping when already high. In practice it didn’t seem to change behavior much. I didn’t push it higher because **too much flap penalty makes the bird too passive and it deterministically hits the ground**—the policy stops flapping enough to stay in the air.
+- **Penalty for being above the gap** – Considered a small negative reward when the bird is above the gap center to reduce “flap into top pipe.” Didn’t implement it because **strong “above gap” penalties also risk the bird preferring to fall and hit the ground** rather than risk being “too high.” Same failure mode as an oversized flap penalty.
+
+**Observations**
+- **Original 7-D** – bird y, bird vy, distance to next pipe, gap center, gap height, “is there a next pipe?”, and signed gap error (gap_center − bird_y, clamped to ±1). The clamp on gap error meant “slightly above” and “way above” both looked similar (both negative), so the policy didn’t get a clear “don’t flap, you’re way too high” signal.
+- **Added clearance from top and bottom of gap (9-D)** – Two new dims: signed clearance from the *top* of the gap and from the *bottom*, in half-gap units, clamped to ±1. So the agent sees explicitly “how far am I from the top pipe?” and “how far am I from the bottom pipe?” That made “way above” vs “slightly above” learnable and helped with consistency on the first pipe and sometimes the second.
+
+**Where things stand**
+- With slower pipes, reduced flap velocity, alignment + streak rewards, a small flap penalty, and the extra clearance obs, the bird **reliably gets the first pipe and sometimes the second**. Episode length hovers around ~200 steps; more training (e.g. 40M steps) didn’t push it much past that—so we’re at a plateau. Perhaps a local minima that just gets the first pipe and doesnt really try for later ones. Trying different checkpoints (earlier saves from the same run) can sometimes yield a slightly more consistent policy than the final one.

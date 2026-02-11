@@ -53,6 +53,7 @@ def main():
     parser.add_argument("--train.env", default="flappy_grid", dest="train_env")
     parser.add_argument("--train.total-timesteps", type=int, default=None, dest="train_total_timesteps")
     parser.add_argument("--train.load-checkpoint", type=str, default=None, dest="train_load_checkpoint")
+    parser.add_argument("--train.learning-rate", type=float, default=None, dest="train_learning_rate")
     known, _ = parser.parse_known_args()
     env_name = known.train_env
     total_timesteps_override = known.train_total_timesteps
@@ -71,6 +72,11 @@ def main():
         del sys.argv[i]
         if i < len(sys.argv):
             del sys.argv[i]  # value
+    if "--train.learning-rate" in sys.argv:
+        i = sys.argv.index("--train.learning-rate")
+        del sys.argv[i]
+        if i < len(sys.argv):
+            del sys.argv[i]  # value
 
     # Load default PufferLib config (train + vec sections)
     args = pufferl.load_config("default")
@@ -78,7 +84,7 @@ def main():
     args["train"]["total_timesteps"] = total_timesteps_override if total_timesteps_override is not None else 5_000_000
     args["train"]["optimizer"] = "adam"
     # Tuned for Flappy (and fine-tuning): lower LR and standard clip to avoid collapse
-    args["train"]["learning_rate"] = 3e-4
+    args["train"]["learning_rate"] = getattr(known, "train_learning_rate", None) or 3e-4
     args["train"]["clip_coef"] = 0.2
     args["train"]["ent_coef"] = 0.01
     if not torch.cuda.is_available():

@@ -34,9 +34,17 @@ Place `bird.png` and `pipe.png` in `resources/flappy/` (relative to the process 
 
 
 uv run python -m curly_succotash.train --train.env flappy
-uv run python -m curly_succotash.run_eval_flappy
-
 uv run python -m curly_succotash.train --train.env flappy --train.total-timesteps 10000000
+
+## Eval (watch the trained bird)
+
+**Latest eval checkpoint:** `experiments/177077412473/model_002441.pt` (fine-tuned, random gaps, ~655 episode length)
+
+```bash
+uv run python -m curly_succotash.run_eval_flappy --model experiments/177077412473/model_002441.pt
+```
+
+Or use latest in experiments: `uv run python -m curly_succotash.run_eval_flappy` (no `--model` = picks newest `model_*.pt`)
 
 ## Fine-tune from fixed-gap checkpoint (random gaps)
 
@@ -48,5 +56,7 @@ Latest checkpoint (fixed-gap run): `experiments/177077321939/model_001220.pt`
 cd src/curly_succotash/flappy && make clean && make && cd ../../..
 
 # Fine-tune from fixed-gap checkpoint (random gaps)
-uv run python -m curly_succotash.train --train.env flappy --train.load-checkpoint experiments/177077321939/model_001220.pt
+uv run python -m curly_succotash.train --train.env flappy --train.load-checkpoint experiments/177077321939/model_001220.pt // good policy
+uv run python -m curly_succotash.train --train.env flappy --train.load-checkpoint experiments/177077412473/model_002441.pt // very good policy, 655 ep length
+uv run python -m curly_succotash.train --train.env flappy --train.load-checkpoint experiments/177077598031/model_002441.pt // another good policy, fine tuned on above with smaller lr 685 ep length
 ```

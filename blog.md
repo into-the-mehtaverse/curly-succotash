@@ -60,5 +60,31 @@ Sweep summary (final entropy per lr × clip_coef, 500k steps per run):
 - **Original 7-D** – bird y, bird vy, distance to next pipe, gap center, gap height, “is there a next pipe?”, and signed gap error (gap_center − bird_y, clamped to ±1). The clamp on gap error meant “slightly above” and “way above” both looked similar (both negative), so the policy didn’t get a clear “don’t flap, you’re way too high” signal.
 - **Added clearance from top and bottom of gap (9-D)** – Two new dims: signed clearance from the *top* of the gap and from the *bottom*, in half-gap units, clamped to ±1. So the agent sees explicitly “how far am I from the top pipe?” and “how far am I from the bottom pipe?” That made “way above” vs “slightly above” learnable and helped with consistency on the first pipe and sometimes the second.
 
-**Where things stand**
-- With slower pipes, reduced flap velocity, alignment + streak rewards, a small flap penalty, and the extra clearance obs, the bird **reliably gets the first pipe and sometimes the second**. Episode length hovers around ~200 steps; more training (e.g. 40M steps) didn’t push it much past that—so we’re at a plateau. Perhaps a local minima that just gets the first pipe and doesnt really try for later ones. Trying different checkpoints (earlier saves from the same run) can sometimes yield a slightly more consistent policy than the final one.
+
+
+**Where things stand (as of yesterday)** – With slower pipes, reduced flap velocity, alignment + streak rewards, a small flap penalty, and the extra clearance obs, the bird reliably gets the first pipe and sometimes the second. Episode length hovers around ~200 steps; more training (e.g. 40M steps) didn’t push it much past that—so we’re at a plateau. Perhaps a local minima that just gets the first pipe and doesn’t really try for later ones. Trying different checkpoints (earlier saves from the same run) can sometimes yield a slightly more consistent policy than the final one.
+
+
+**Bugs fixed along the way**
+- **“Next” pipe could be wrong** – “Next” was the first pipe in *array* order that was still in front of the bird. After recycling, the leftmost pipe moves to the right so array order ≠ left-to-right; the agent could get obs for a pipe it wasn’t actually approaching. Fixed by choosing the pipe in front with the *smallest x* (closest).
+- **Pipe recycling broke spacing** – On recycle we set the new pipe’s x to `rightmost + spacing`, then called `spawn_pipe()`, which overwrote x with the screen width. That put two pipes almost on top of each other. Fixed by having `spawn_pipe()` only set gap and scored; the caller keeps responsibility for x.
+
+**Where things stood (plateau)**
+- With slower pipes, reduced flap velocity, alignment + streak rewards, a small flap penalty, and the extra clearance obs, the bird **reliably got the first pipe and sometimes the second**. Episode length hovered around ~200 steps; more training didn’t push it much past that.
+
+**Curriculum and fine-tuning**
+
+1. **Shorter run-up to the first pipe** – The distance from bird spawn to the first pipe was longer than the spacing between later pipes, so the agent saw many more “approach first pipe” steps than “approach second pipe” and never got enough positive examples for pipes 2+. I cut that initial distance in half (first pipe at 0.5× width instead of 0.8×). That helped: return and score improved.
+
+2. **Sanity check: fixed gap** – To verify the env and training stack, I removed gap randomness so every pipe had its gap in the middle (same y). My reasoning: if everything is correct, the agent should learn to stay in the middle and fly forever. After a 10M-step run with this “fixed gap” env, the agent reached my max terminal (50 pipes) and kept going—so the env and PufferLib were fine. The difficulty with random gaps was task difficulty, not a bug.
+
+3. **Fine-tune from fixed-gap, then catastrophic failure** – I used the fixed-gap checkpoint as a starting point and reintroduced random gaps, then fine-tuned. After more steps, the policy **collapsed**: episode length dropped to ~5–6, the bird was effectively suiciding. I’d left the hyperparameters from the simple grid task in place (high LR, loose clip, high entropy). I rolled them back to values better suited for a harder, stochastic task:
+   - **Learning rate** – How big each gradient step is; too high and the policy overshoots and can forget good behavior (I went 0.02 → 3e-4).
+   - **Clip coefficient** – PPO’s limit on how much the policy can change per update; too loose and updates are noisy (0.5 → 0.2).
+   - **Entropy coefficient** – Bonus for exploring; too high and the policy stays too random and doesn’t commit to a strategy (0.2 → 0.01).
+
+   With LR 3e-4, clip 0.2, and ent_coef 0.01, I fine-tuned again from the *previous* good checkpoint (before the collapse) for 20M steps. That produced a policy with **average episode return ~2.76 and episode length ~655**—a clear improvement. On eval, the bird consistently gets several pipes, with some runs reaching the high teens or twenties, but it’s still inconsistent and there’s room to improve.
+
+4. **Further fine-tuning** – Additional fine-tuning runs (another 5M or 20M steps from that best checkpoint) gave similar or slightly worse metrics (e.g. length ~601–608 vs 655). So I’m sticking with the checkpoint that achieved ~655 episode length as my best model for eval. The lesson: once you have a good checkpoint on a stochastic task, more training with the same setup doesn’t always help; sometimes it’s noise or a slight regression, and the best thing is to keep that checkpoint for deployment and only change hyperparams or curriculum if you want to push further.
+
+5. Just tried another fine tuning with a smaller learning rate for 50M steps and it gave a worse result. I think the 655 run was our local optimum.

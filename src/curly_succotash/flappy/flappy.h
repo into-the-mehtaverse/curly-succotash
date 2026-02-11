@@ -13,6 +13,7 @@
 #define GAP_HEIGHT_RATIO 0.28f
 #define FIXED_GAP_DEBUG 0       /* 1 = all gaps at same height (debug); 0 = random gap center 0.25–0.75 */
 #define FIXED_GAP_CENTER_Y 0.5f
+#define BIAS_HARD_GAPS 0        /* 1 = sample gap from extremes [0.25,0.35] and [0.65,0.75] only (training); 0 = uniform [0.25,0.75] */
 #define PIPE_SPEED_RATIO 0.006f  /* slower pipes so bird has more time to align; was 0.012 */
 #define FLAP_VEL 0.02f   /* upward velocity per flap; lower = finer control, less overshoot */
 #define GRAVITY 0.0018f
@@ -96,6 +97,12 @@ static float clampf(float v, float lo, float hi) {
 static void spawn_pipe(Flappy* env, int idx) {
 #if FIXED_GAP_DEBUG
     env->pipes[idx].gap_center_y = FIXED_GAP_CENTER_Y;
+#elif BIAS_HARD_GAPS
+    /* Sample only from extreme bands so policy sees more hard cases */
+    if (rand() % 2 == 0)
+        env->pipes[idx].gap_center_y = 0.25f + (float)(rand() % 11) / 100.0f;  /* [0.25, 0.35] */
+    else
+        env->pipes[idx].gap_center_y = 0.65f + (float)(rand() % 11) / 100.0f;  /* [0.65, 0.75] */
 #else
     env->pipes[idx].gap_center_y = 0.25f + (float)(rand() % 50) / 100.0f;
 #endif
@@ -181,6 +188,11 @@ void c_reset(Flappy* env) {
         env->pipes[i].x = start_x + (float)i * env->width * env->pipe_spacing;
 #if FIXED_GAP_DEBUG
         env->pipes[i].gap_center_y = FIXED_GAP_CENTER_Y;
+#elif BIAS_HARD_GAPS
+        if (rand() % 2 == 0)
+            env->pipes[i].gap_center_y = 0.25f + (float)(rand() % 11) / 100.0f;
+        else
+            env->pipes[i].gap_center_y = 0.65f + (float)(rand() % 11) / 100.0f;
 #else
         env->pipes[i].gap_center_y = 0.25f + (float)(rand() % 50) / 100.0f;
 #endif

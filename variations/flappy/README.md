@@ -1,6 +1,6 @@
 # Flappy curriculum variation (C + raylib)
 
-Same as main Flappy but gap difficulty is set by a curriculum phase (0=fixed, 1=medium, 2=full random, 3=biased). Phase is read from `curriculum_phase.txt` at each reset; the trainer writes it on a schedule.
+Same as main Flappy but gap difficulty follows a continuous curriculum (0.0 to 1.0) that is computed in Python and pushed into the C envs via a shared `multiprocessing.Value`.
 
 ## Build
 

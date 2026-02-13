@@ -17,6 +17,7 @@ import argparse
 import multiprocessing
 import os
 import sys
+import math
 
 import torch
 import pufferlib.models
@@ -84,6 +85,18 @@ def main():
         vec_kwargs["num_workers"] = 2
     if vec_kwargs.get("num_envs") in (None, "auto") or vec_kwargs.get("num_envs", 0) < 128:
         vec_kwargs["num_envs"] = 128
+
+    # Keep training config valid: batch_size must be >= minibatch_size.
+    # With one agent/env, default batch_size is num_envs * bptt_horizon.
+    bptt = int(args["train"].get("bptt_horizon", 64))
+    minibatch = int(args["train"]["minibatch_size"])
+    required_envs = max(1, math.ceil(minibatch / max(1, bptt)))
+    if vec_kwargs["num_envs"] < required_envs:
+        vec_kwargs["num_envs"] = required_envs
+        print(
+            f"[flappyv3] raised vec.num_envs to {required_envs} so "
+            f"batch_size ({required_envs * bptt}) >= minibatch_size ({minibatch})"
+        )
 
     # No curriculum in v3: keep difficulty fixed for the whole run.
     difficulty_value = multiprocessing.Value("f", float(known.env_fixed_difficulty))
